@@ -68,6 +68,13 @@ export function calculateQuotationTotals(quotation: Quotation): {
     totalAmountAED += effectiveAmount;
   });
 
+  if (quotation.status === 'confirmed' && typeof quotation.confirmedTotalAmount === 'number') {
+    totalAmountAED = quotation.confirmedTotalAmount;
+  }
+  if (quotation.status === 'confirmed' && typeof quotation.confirmedQty === 'number') {
+    grandTotalQty = quotation.confirmedQty;
+  }
+
   grandTotalSqm = Number(grandTotalSqm.toFixed(2));
   totalAmountAED = Number(totalAmountAED.toFixed(2));
 

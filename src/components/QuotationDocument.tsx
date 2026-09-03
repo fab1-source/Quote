@@ -13,10 +13,15 @@ interface QuotationDocumentProps {
 
 export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
   quotation,
-  isEditable = false,
+  isEditable: initialIsEditable = false,
   onUpdateQuotation,
   onOpenPasteModalForSection,
 }) => {
+  const isCancelled = quotation.status === 'cancelled';
+  const isConfirmed = quotation.status === 'confirmed';
+  const isLocked = isCancelled || isConfirmed;
+  const isEditable = initialIsEditable && !isLocked;
+
   const { grandTotalQty, grandTotalSqm, totalAmountAED, vatAmountAED, totalWithVatAED } =
     calculateQuotationTotals(quotation);
 
@@ -60,6 +65,54 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
         <InterglassLogoBanner className="my-0.5" />
       </div>
 
+      {/* Cancellation Notice Banner */}
+      {isCancelled && (
+        <div className="mb-3 bg-red-50 border-2 border-red-600 rounded p-2.5 text-red-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 print:border-red-600 print:bg-red-50">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono font-bold text-xs uppercase px-2 py-0.5 bg-red-600 text-white rounded">
+              CANCELLED
+            </span>
+            <span className="text-[11px] font-medium">
+              This quotation is <strong>cancelled & void</strong>.
+              {quotation.cancellationReason && (
+                <span className="ml-1 text-red-800">
+                  Reason: <span className="italic font-semibold underline">"{quotation.cancellationReason}"</span>
+                </span>
+              )}
+            </span>
+          </div>
+          {quotation.cancelledAt && (
+            <span className="text-[10px] text-red-700 font-mono">
+              Cancelled: {new Date(quotation.cancelledAt).toLocaleDateString('en-GB')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Confirmed Notice Banner */}
+      {isConfirmed && (
+        <div className="mb-3 bg-emerald-50 border-2 border-emerald-600 rounded p-2.5 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 print:border-emerald-600 print:bg-emerald-50">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono font-bold text-xs uppercase px-2 py-0.5 bg-emerald-700 text-white rounded">
+              CONFIRMED ORDER
+            </span>
+            <span className="text-[11px] font-medium">
+              This quotation has been <strong>confirmed</strong> and locked.
+              {quotation.salesmanName && (
+                <span className="ml-1 text-emerald-900">
+                  Salesman / Order Assigned To: <span className="font-bold underline">{quotation.salesmanName}</span>
+                </span>
+              )}
+            </span>
+          </div>
+          {quotation.confirmedAt && (
+            <span className="text-[10px] text-emerald-800 font-mono font-semibold">
+              Confirmed: {new Date(quotation.confirmedAt).toLocaleDateString('en-GB')}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* 2. Side by Side To & From Tables */}
       <div className="grid grid-cols-2 gap-0 border-t border-l border-r border-black">
         {/* LEFT COLUMN: TO (Client) */}
@@ -73,7 +126,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
                     <input
                       type="text"
                       value={quotation.client.name}
-                      placeholder="e.g. Thamvos Interiors"
+                      placeholder="Client Name"
                       onChange={(e) => updateClient('name', e.target.value)}
                       className="w-full font-semibold border-b border-dashed border-neutral-300 focus:border-black outline-none bg-transparent"
                     />
@@ -235,16 +288,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
                 <td className="font-medium px-2 py-1 bg-neutral-50/50 border-r border-black">Ref No.</td>
                 <td className="px-2 py-1">
                   <div className="flex items-center justify-between">
-                    {isEditable ? (
-                      <input
-                        type="text"
-                        value={quotation.from.refNo}
-                        onChange={(e) => updateFrom('refNo', e.target.value)}
-                        className="font-bold border-b border-dashed border-neutral-300 focus:border-black outline-none bg-transparent w-2/3"
-                      />
-                    ) : (
-                      <span className="font-bold">{quotation.from.refNo}</span>
-                    )}
+                    <span className="font-bold font-mono">{quotation.from.refNo}</span>
                     {isEditable ? (
                       <input
                         type="text"
@@ -348,6 +392,14 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
                   )}
                 </td>
               </tr>
+              {quotation.salesmanName && (
+                <tr className="border-b border-black bg-neutral-50/70">
+                  <td className="font-medium px-2 py-1 bg-neutral-100 border-r border-black">Salesman</td>
+                  <td className="px-2 py-1 font-bold text-neutral-900">
+                    {quotation.salesmanName}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

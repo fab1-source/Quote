@@ -23,7 +23,7 @@ import {
 import {
   getSavedQuotations,
   saveQuotation,
-  deleteQuotation,
+  cancelQuotation,
   createNewQuotationWithNextRef,
   duplicateQuotation,
   initializeSampleIfEmpty,
@@ -108,25 +108,22 @@ export default function App() {
     showNotification(`Duplicated as ${newQuotation.from.refNo}`, 'success');
   };
 
-  // DASHBOARD ACTION: Delete quote
-  const handleDeleteQuotation = (id: string) => {
+  // DASHBOARD ACTION: Cancel quote
+  const handleCancelQuotation = (id: string, reason: string) => {
     const target = quotations.find((q) => q.id === id);
     const ref = target?.from?.refNo || 'this quotation';
-    if (confirm(`Are you sure you want to delete ${ref}?`)) {
-      const updated = deleteQuotation(id);
-      setQuotations(updated);
-      if (quotation.id === id) {
-        if (updated.length > 0) {
-          setQuotation(updated[0]);
-        } else {
-          setQuotation(createNewQuotationWithNextRef());
-        }
+    const updated = cancelQuotation(id, reason);
+    setQuotations(updated);
+    if (quotation.id === id) {
+      const updatedQuote = updated.find((q) => q.id === id);
+      if (updatedQuote) {
+        setQuotation(updatedQuote);
       }
-      showNotification(`Deleted ${ref}`, 'info');
     }
+    showNotification(`Cancelled quotation ${ref} and locked reference`, 'info');
   };
 
-  // Load sample template matching official Thamvos Interiors sample
+  // Load sample quotation template
   const handleLoadSample = () => {
     const sample = createSampleQuotation();
     sample.id = `sample-quote-${Date.now()}`;
@@ -134,7 +131,7 @@ export default function App() {
     const updatedList = saveQuotation(sample);
     setQuotations(updatedList);
     setQuotation(sample);
-    showNotification('Loaded sample quotation from template sheet', 'success');
+    showNotification('Loaded sample quotation template', 'success');
   };
 
   // Export JSON Backup
@@ -315,7 +312,7 @@ export default function App() {
           onAddNewQuotation={handleAddNewQuotation}
           onOpenQuotation={handleOpenQuotation}
           onDuplicateQuotation={handleDuplicateQuotation}
-          onDeleteQuotation={handleDeleteQuotation}
+          onCancelQuotation={handleCancelQuotation}
           onLoadSample={handleLoadSample}
           onExportBackup={handleExportBackup}
           onImportBackup={handleImportBackup}
@@ -336,14 +333,18 @@ export default function App() {
             onOpenHistory={() => setIsHistoryOpen(true)}
             onBackToDashboard={() => {
               // Ensure current changes are saved and return to dashboard
-              saveQuotation(quotation);
+              if (quotation.status !== 'cancelled') {
+                saveQuotation(quotation);
+              }
               setQuotations(getSavedQuotations());
               setViewMode('dashboard');
             }}
-            onSaveCurrentQuote={handleSaveCurrentQuote}
+            onSaveCurrentQuote={quotation.status !== 'cancelled' ? handleSaveCurrentQuote : undefined}
             glassSectionCount={quotation.glassSections.length}
             currentRefNo={quotation.from?.refNo}
             clientName={quotation.client?.name}
+            isCancelled={quotation.status === 'cancelled'}
+            cancellationReason={quotation.cancellationReason}
           />
 
           {/* Main Content Area */}
@@ -353,7 +354,9 @@ export default function App() {
                 {/* Header: Client TO & Interglass FROM info */}
                 <CompanyAndClientCard
                   quotation={quotation}
+                  readOnly={quotation.status === 'cancelled'}
                   onUpdateQuotation={(updated) => {
+                    if (quotation.status === 'cancelled') return;
                     updateQuotationAndStorage(() => updated);
                   }}
                 />
@@ -367,19 +370,26 @@ export default function App() {
                       </div>
                       <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Glass Specifications & Sizes ({quotation.glassSections.length} Sections)
+                        {quotation.status === 'cancelled' && (
+                          <span className="ml-2 text-[10px] text-red-600 font-bold uppercase bg-red-100 px-1.5 py-0.5 rounded">
+                            Locked
+                          </span>
+                        )}
                       </h2>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleAddGlassSection}
-                      className="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>
-                        Add Glass Section (Glass -{String(quotation.glassSections.length + 1).padStart(2, '0')})
-                      </span>
-                    </button>
+                    {quotation.status !== 'cancelled' && (
+                      <button
+                        type="button"
+                        onClick={handleAddGlassSection}
+                        className="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>
+                          Add Glass Section (Glass -{String(quotation.glassSections.length + 1).padStart(2, '0')})
+                        </span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Glass Sections Loop */}
@@ -391,33 +401,36 @@ export default function App() {
                       totalSections={quotation.glassSections.length}
                       applyMinRule={quotation.applyMinAreaRule}
                       minThreshold={quotation.minAreaThreshold}
+                      readOnly={quotation.status === 'cancelled'}
                       onUpdateSection={handleUpdateSection}
                       onRemoveSection={handleRemoveSection}
-                      onMoveUp={idx > 0 ? () => handleMoveSectionUp(idx) : undefined}
+                      onMoveUp={idx > 0 && quotation.status !== 'cancelled' ? () => handleMoveSectionUp(idx) : undefined}
                       onMoveDown={
-                        idx < quotation.glassSections.length - 1
+                        idx < quotation.glassSections.length - 1 && quotation.status !== 'cancelled'
                           ? () => handleMoveSectionDown(idx)
                           : undefined
                       }
                     />
                   ))}
 
-                  {/* Bottom Add Section Card */}
-                  <div
-                    onClick={handleAddGlassSection}
-                    className="border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-blue-600"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-xs">
-                      <Plus className="w-5 h-5 text-blue-600" />
+                  {/* Bottom Add Section Card (Hidden if cancelled) */}
+                  {quotation.status !== 'cancelled' && (
+                    <div
+                      onClick={handleAddGlassSection}
+                      className="border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-blue-600"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-xs">
+                        <Plus className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="font-semibold text-xs text-slate-700">
+                        Click to Add Another Glass Type Section (Glass -
+                        {String(quotation.glassSections.length + 1).padStart(2, '0')})
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Multiple glass types supported (Annealed, Toughened, Polished, Laminated, Double Glazed)
+                      </div>
                     </div>
-                    <div className="font-semibold text-xs text-slate-700">
-                      Click to Add Another Glass Type Section (Glass -
-                      {String(quotation.glassSections.length + 1).padStart(2, '0')})
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      Multiple glass types supported (Annealed, Toughened, Polished, Laminated, Double Glazed)
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Calculation & Summary Card */}
@@ -555,11 +568,15 @@ export default function App() {
                 <div className="overflow-x-auto py-2">
                   <QuotationDocument
                     quotation={quotation}
-                    isEditable={true}
+                    isEditable={quotation.status !== 'cancelled'}
                     onUpdateQuotation={(updated) => {
+                      if (quotation.status === 'cancelled') return;
                       updateQuotationAndStorage(() => updated);
                     }}
-                    onOpenPasteModalForSection={(section) => setActivePasteSection(section)}
+                    onOpenPasteModalForSection={(section) => {
+                      if (quotation.status === 'cancelled') return;
+                      setActivePasteSection(section);
+                    }}
                   />
                 </div>
               </div>

@@ -94,19 +94,19 @@ export const createBlankQuotation = (initialRefNo?: string): Quotation => {
   };
 };
 
-// Sample quotation matching the exact attached PDF template
+// Sample quotation template
 export const createSampleQuotation = (): Quotation => {
   return {
-    id: "sample-quote-3685",
-    title: "Thamvos Interiors - IG/26-06/3685",
+    id: "sample-quote-001",
+    title: "Sample Quotation",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     client: {
-      name: "Thamvos Interiors",
+      name: "Sample Client LLC",
       emirate: "Dubai",
       tel: "",
-      fax: "06 5437736",
-      kindAttn: "Karishma",
+      fax: "",
+      kindAttn: "Project Manager",
       contactNo: "",
       email: "",
       ref: "",

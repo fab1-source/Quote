@@ -22,11 +22,11 @@ export interface GlassSection {
 }
 
 export interface ClientInfo {
-  name: string; // Thamvos Interiors
+  name: string; // Client Company Name
   emirate: string;
   tel: string;
   fax: string;
-  kindAttn: string; // Karishma
+  kindAttn: string;
   contactNo: string;
   email: string;
   ref: string;
@@ -59,6 +59,13 @@ export interface Quotation {
   title: string;
   createdAt: string;
   updatedAt: string;
+  status?: 'active' | 'cancelled' | 'confirmed';
+  cancellationReason?: string;
+  cancelledAt?: string;
+  confirmedAt?: string;
+  salesmanName?: string;
+  confirmedQty?: number;
+  confirmedTotalAmount?: number;
   client: ClientInfo;
   from: FromInfo;
   scopeOfWork: string;

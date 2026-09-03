@@ -55,7 +55,22 @@ export function getSavedQuotations(): Quotation[] {
     if (!data) return [];
     const parsed = JSON.parse(data);
     if (Array.isArray(parsed)) {
-      return parsed;
+      // Cleanse any legacy references from storage
+      const cleaned = parsed
+        .filter((q) => !q.id?.includes('thamvos') && q.client?.name !== 'Thamvos Interiors')
+        .map((q) => {
+          let str = JSON.stringify(q);
+          if (str.includes('Thamvos') || str.includes('thamvos')) {
+            str = str.replace(/Thamvos Interiors/gi, 'Client LLC')
+                     .replace(/Thamvos/gi, 'Client');
+            return JSON.parse(str);
+          }
+          return q;
+        });
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     }
     return [];
   } catch (error) {
@@ -112,6 +127,103 @@ export function deleteQuotation(id: string): Quotation[] {
 }
 
 /**
+ * Cancels an existing quotation by recording reason, timestamp and setting status to 'cancelled'.
+ * Quotations are never deleted, ensuring the sequential quote numbers remain intact in records.
+ */
+export function cancelQuotation(id: string, reason: string): Quotation[] {
+  const currentList = getSavedQuotations();
+  const now = new Date().toISOString();
+  const updatedList = currentList.map((q) => {
+    if (q.id === id) {
+      return {
+        ...q,
+        status: 'cancelled' as const,
+        cancellationReason: reason.trim(),
+        cancelledAt: now,
+        updatedAt: now,
+      };
+    }
+    return q;
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+  } catch (error) {
+    console.error('Failed to cancel quotation in storage', error);
+  }
+
+  return updatedList;
+}
+
+export interface ConfirmationDetails {
+  clientName: string;
+  salesmanName: string;
+  qty: number;
+  totalAmount: number;
+}
+
+/**
+ * Marks quotation as confirmed, locks editing, updates client name, salesman and amounts.
+ */
+export function confirmQuotation(id: string, details: ConfirmationDetails): Quotation[] {
+  const currentList = getSavedQuotations();
+  const now = new Date().toISOString();
+  const updatedList = currentList.map((q) => {
+    if (q.id === id) {
+      return {
+        ...q,
+        status: 'confirmed' as const,
+        confirmedAt: now,
+        updatedAt: now,
+        salesmanName: details.salesmanName.trim(),
+        client: {
+          ...q.client,
+          name: details.clientName.trim(),
+        },
+        confirmedQty: details.qty,
+        confirmedTotalAmount: details.totalAmount,
+      };
+    }
+    return q;
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+  } catch (error) {
+    console.error('Failed to confirm quotation in storage', error);
+  }
+
+  return updatedList;
+}
+
+/**
+ * Reverts quotation from confirmed back to active (unlocks editing).
+ */
+export function unconfirmQuotation(id: string): Quotation[] {
+  const currentList = getSavedQuotations();
+  const now = new Date().toISOString();
+  const updatedList = currentList.map((q) => {
+    if (q.id === id) {
+      return {
+        ...q,
+        status: 'active' as const,
+        updatedAt: now,
+        confirmedAt: undefined,
+      };
+    }
+    return q;
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+  } catch (error) {
+    console.error('Failed to unconfirm quotation in storage', error);
+  }
+
+  return updatedList;
+}
+
+/**
  * Creates a brand new quotation with the next sequential quote number.
  */
 export function createNewQuotationWithNextRef(date: Date = new Date()): Quotation {
@@ -121,6 +233,7 @@ export function createNewQuotationWithNextRef(date: Date = new Date()): Quotatio
 
   const newQuote = createBlankQuotation();
   newQuote.id = `quote-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+  newQuote.status = 'active';
   newQuote.from.refNo = nextRefNo;
   newQuote.from.dated = dated;
   newQuote.title = `Quotation ${nextRefNo}`;
@@ -158,17 +271,8 @@ export function duplicateQuotation(id: string): { newQuotation: Quotation; allQu
 }
 
 /**
- * Pre-populates the sample quotation if the database is currently completely empty,
- * ensuring users can explore immediately if desired.
+ * Initializes saved quotations if available, or starts clean.
  */
 export function initializeSampleIfEmpty(): Quotation[] {
-  const current = getSavedQuotations();
-  if (current.length === 0) {
-    const sample = createSampleQuotation();
-    sample.from.refNo = 'IGC/26/06/001';
-    sample.title = 'Thamvos Interiors - IGC/26/06/001';
-    const updated = saveQuotation(sample);
-    return updated;
-  }
-  return current;
+  return getSavedQuotations();
 }

@@ -30,6 +30,10 @@ interface TopNavbarProps {
   glassSectionCount: number;
   currentRefNo?: string;
   clientName?: string;
+  isCancelled?: boolean;
+  cancellationReason?: string;
+  isConfirmed?: boolean;
+  salesmanName?: string;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -47,7 +51,12 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   glassSectionCount,
   currentRefNo,
   clientName,
+  isCancelled = false,
+  cancellationReason,
+  isConfirmed = false,
+  salesmanName,
 }) => {
+  const isLocked = isCancelled || isConfirmed;
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm print:hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
@@ -73,7 +82,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {currentRefNo ? (
-                <span className="font-mono font-bold text-xs sm:text-sm text-[#7B1818] bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                <span className={`font-mono font-bold text-xs sm:text-sm px-2 py-0.5 rounded border ${
+                  isCancelled 
+                    ? 'text-red-700 bg-red-100/70 border-red-300' 
+                    : 'text-[#7B1818] bg-red-50 border-red-200'
+                }`}>
                   {currentRefNo}
                 </span>
               ) : (
@@ -81,9 +94,24 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   Interglass
                 </h1>
               )}
+              {isCancelled && (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-red-600 text-white shadow-xs">
+                  Cancelled (Locked)
+                </span>
+              )}
+              {isConfirmed && (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-600 text-white shadow-xs">
+                  Confirmed (Locked)
+                </span>
+              )}
               {clientName && (
                 <span className="text-xs text-slate-600 truncate max-w-[120px] sm:max-w-[180px] font-medium hidden sm:inline-block">
                   • {clientName}
+                </span>
+              )}
+              {salesmanName && (
+                <span className="text-xs text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded truncate max-w-[140px] font-semibold hidden md:inline-block">
+                  👤 {salesmanName}
                 </span>
               )}
             </div>
@@ -123,8 +151,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Quick Save button */}
-          {onSaveCurrentQuote && (
+          {/* Quick Save button - hidden if locked */}
+          {!isLocked && onSaveCurrentQuote && (
             <button
               type="button"
               onClick={onSaveCurrentQuote}
@@ -136,16 +164,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             </button>
           )}
 
-          {/* Add Glass Section (+) */}
-          <button
-            type="button"
-            onClick={onAddGlassSection}
-            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md shadow-xs transition cursor-pointer"
-            title="Add a new glass type section (Glass -02, Glass -03...)"
-          >
-            <Plus className="w-3.5 h-3.5 text-blue-600" />
-            <span>Add Glass Type ({glassSectionCount + 1})</span>
-          </button>
+          {/* Add Glass Section (+) - hidden if locked */}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={onAddGlassSection}
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md shadow-xs transition cursor-pointer"
+              title="Add a new glass type section (Glass -02, Glass -03...)"
+            >
+              <Plus className="w-3.5 h-3.5 text-blue-600" />
+              <span>Add Glass Type ({glassSectionCount + 1})</span>
+            </button>
+          )}
 
           {/* PRINT BUTTON */}
           <button
@@ -175,6 +205,35 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Cancelled Banner underneath navbar */}
+      {isCancelled && (
+        <div className="bg-red-50 border-t border-red-200 px-4 py-2 text-center text-xs text-red-800 flex items-center justify-center gap-2">
+          <span className="font-bold uppercase tracking-wider bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+            Quotation Cancelled
+          </span>
+          <span>
+            This quote reference has been cancelled and is in read-only mode.
+            {cancellationReason && (
+              <span className="font-medium ml-1">
+                Reason: <strong className="underline italic">{cancellationReason}</strong>
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Confirmed Banner underneath navbar */}
+      {isConfirmed && (
+        <div className="bg-emerald-50 border-t border-emerald-200 px-4 py-2 text-center text-xs text-emerald-900 flex items-center justify-center gap-2">
+          <span className="font-bold uppercase tracking-wider bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+            Quotation Confirmed
+          </span>
+          <span>
+            Order assigned to {salesmanName ? <strong>{salesmanName}</strong> : 'Salesman'}. This quotation is confirmed and locked for editing.
+          </span>
+        </div>
+      )}
     </header>
   );
 };

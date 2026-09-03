@@ -23,6 +23,7 @@ interface GlassSectionCardProps {
   onRemoveSection: (id: string) => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  readOnly?: boolean;
 }
 
 const COMMON_GLASS_DESCRIPTIONS = [
@@ -57,6 +58,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
   onRemoveSection,
   onMoveUp,
   onMoveDown,
+  readOnly = false,
 }) => {
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -148,6 +150,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
 
   // Direct paste on container
   const handleDirectPaste = (e: React.ClipboardEvent) => {
+    if (readOnly) return;
     const pastedData = e.clipboardData.getData('text');
     if (pastedData && pastedData.includes('\t')) {
       e.preventDefault();
@@ -169,9 +172,10 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
           {/* Section Code Badge */}
           <input
             type="text"
+            disabled={readOnly}
             value={section.sectionCode}
             onChange={(e) => onUpdateSection({ ...section, sectionCode: e.target.value })}
-            className="w-24 text-center font-bold text-xs bg-blue-100 text-blue-700 border border-blue-200/80 rounded-md py-1.5 px-2 uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-24 text-center font-bold text-xs bg-blue-100 text-blue-700 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed border border-blue-200/80 disabled:border-slate-200 rounded-md py-1.5 px-2 uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             title="Section identifier (e.g. Glass -01)"
           />
 
@@ -179,22 +183,25 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
           <div className="relative flex-1">
             <input
               type="text"
+              disabled={readOnly}
               value={section.description}
               onChange={(e) => onUpdateSection({ ...section, description: e.target.value })}
               placeholder="e.g. Supply of 4mm Clear glass Annealed only"
-              className="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-md py-1.5 px-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+              className="w-full text-xs font-semibold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-600 disabled:cursor-not-allowed border border-slate-200 rounded-md py-1.5 px-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             />
             {/* Presets dropdown toggle */}
-            <button
-              type="button"
-              onClick={() => setShowPresets(!showPresets)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
-              title="Common glass descriptions"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setShowPresets(!showPresets)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
+                title="Common glass descriptions"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+              </button>
+            )}
 
-            {showPresets && (
+            {showPresets && !readOnly && (
               <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto p-1.5 text-xs">
                 <div className="px-2 py-1 font-semibold text-slate-400 uppercase text-[10px] tracking-wider">
                   Common Glass Types
@@ -219,28 +226,32 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
 
         {/* Section Action Buttons */}
         <div className="flex items-center gap-2">
-          {/* Excel Paste Button */}
-          <button
-            type="button"
-            onClick={() => setIsPasteModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Paste from Excel</span>
-          </button>
+          {!readOnly && (
+            <>
+              {/* Excel Paste Button */}
+              <button
+                type="button"
+                onClick={() => setIsPasteModalOpen(true)}
+                className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Paste from Excel</span>
+              </button>
 
-          {/* Add Row Button */}
-          <button
-            type="button"
-            onClick={handleAddItem}
-            className="px-3 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-slate-600" />
-            <span>Add Row</span>
-          </button>
+              {/* Add Row Button */}
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="px-3 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-slate-600" />
+                <span>Add Row</span>
+              </button>
+            </>
+          )}
 
           {/* Section Reorder / Collapse */}
-          {onMoveUp && (
+          {!readOnly && onMoveUp && (
             <button
               type="button"
               onClick={onMoveUp}
@@ -251,7 +262,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
               <ChevronUp className="w-4 h-4" />
             </button>
           )}
-          {onMoveDown && (
+          {!readOnly && onMoveDown && (
             <button
               type="button"
               onClick={onMoveDown}
@@ -274,7 +285,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
           </button>
 
           {/* Delete Section */}
-          {totalSections > 1 && (
+          {!readOnly && totalSections > 1 && (
             <button
               type="button"
               onClick={() => onRemoveSection(section.id)}
@@ -310,6 +321,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
             <input
               type="number"
               step="0.1"
+              disabled={readOnly}
               value={section.ratePerSqm || ''}
               onChange={(e) => {
                 const val = parseFloat(e.target.value) || 0;
@@ -320,13 +332,14 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                 });
               }}
               placeholder="0.00"
-              className="w-20 text-right text-xs py-1 px-2 border border-slate-200 rounded-md bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-20 text-right text-xs py-1 px-2 border border-slate-200 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed rounded-md bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
-          <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-slate-600">
+          <label className={`inline-flex items-center gap-1.5 select-none text-slate-600 ${readOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
             <input
               type="checkbox"
+              disabled={readOnly}
               checked={section.useCalculatedAmount || false}
               onChange={(e) => {
                 const isCalc = e.target.checked;
@@ -339,7 +352,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                   sectionAmount: newAmount
                 });
               }}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 disabled:cursor-not-allowed"
             />
             <span>Auto Amount</span>
           </label>
@@ -350,7 +363,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
               <input
                 type="number"
                 step="0.01"
-                disabled={section.useCalculatedAmount}
+                disabled={readOnly || section.useCalculatedAmount}
                 value={effectiveAmount || ''}
                 onChange={(e) =>
                   onUpdateSection({
@@ -360,8 +373,8 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                 }
                 placeholder="0.00"
                 className={`w-28 text-right font-bold text-xs py-1 px-2 border rounded-md ${
-                  section.useCalculatedAmount
-                    ? 'bg-slate-100 text-slate-600 border-slate-200'
+                  section.useCalculatedAmount || readOnly
+                    ? 'bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed'
                     : 'bg-white text-blue-800 border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
                 }`}
               />
@@ -382,25 +395,33 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
               <p className="text-xs font-semibold text-slate-700">
                 No glass sizes added yet for {section.sectionCode}.
               </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Click "Paste from Excel" to import sizes directly, or click "Add Row" to enter manually.
-              </p>
-              <div className="mt-4 flex justify-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsPasteModalOpen(true)}
-                  className="px-3.5 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-xs transition-colors cursor-pointer"
-                >
-                  Paste from Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md shadow-xs transition-colors cursor-pointer"
-                >
-                  Add Single Row
-                </button>
-              </div>
+              {!readOnly ? (
+                <>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Click "Paste from Excel" to import sizes directly, or click "Add Row" to enter manually.
+                  </p>
+                  <div className="mt-4 flex justify-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsPasteModalOpen(true)}
+                      className="px-3.5 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-xs transition-colors cursor-pointer"
+                    >
+                      Paste from Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md shadow-xs transition-colors cursor-pointer"
+                    >
+                      Add Single Row
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-slate-400 mt-1">
+                  This quotation is cancelled and locked for editing.
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -423,54 +444,59 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                     <td className="py-1.5 px-4 text-center text-slate-400 font-mono text-xs">
                       <input
                         type="text"
+                        disabled={readOnly}
                         value={item.sNo}
                         onChange={(e) => handleUpdateItem(item.id, 'sNo', e.target.value)}
-                        className="w-10 text-center font-mono text-xs border border-transparent hover:border-slate-200 focus:border-blue-500 rounded py-0.5 bg-transparent focus:bg-white"
+                        className="w-10 text-center font-mono text-xs border border-transparent hover:border-slate-200 disabled:hover:border-transparent focus:border-blue-500 disabled:cursor-not-allowed rounded py-0.5 bg-transparent focus:bg-white"
                       />
                     </td>
                     <td className="py-1.5 px-4">
                       <input
                         type="text"
+                        disabled={readOnly}
                         value={item.code}
                         placeholder="e.g. WD-C-04"
                         onChange={(e) => handleUpdateItem(item.id, 'code', e.target.value)}
-                        className="w-full font-mono text-xs border border-transparent hover:border-slate-200 focus:border-blue-500 rounded py-0.5 px-1 bg-transparent focus:bg-white"
+                        className="w-full font-mono text-xs border border-transparent hover:border-slate-200 disabled:hover:border-transparent focus:border-blue-500 disabled:cursor-not-allowed rounded py-0.5 px-1 bg-transparent focus:bg-white"
                       />
                     </td>
                     <td className="py-1.5 px-4 text-right font-semibold">
                       <input
                         type="number"
                         min="1"
+                        disabled={readOnly}
                         placeholder="Qty"
                         value={item.qty || ''}
                         onChange={(e) =>
                           handleUpdateItem(item.id, 'qty', parseInt(e.target.value, 10) || 0)
                         }
-                        className="w-16 text-right font-medium text-xs border border-transparent hover:border-slate-200 focus:border-blue-500 rounded py-0.5 px-1 bg-transparent focus:bg-white"
+                        className="w-16 text-right font-medium text-xs border border-transparent hover:border-slate-200 disabled:hover:border-transparent focus:border-blue-500 disabled:cursor-not-allowed rounded py-0.5 px-1 bg-transparent focus:bg-white"
                       />
                     </td>
                     <td className="py-1.5 px-4 text-right">
                       <input
                         type="number"
                         min="1"
+                        disabled={readOnly}
                         placeholder="Width"
                         value={item.width || ''}
                         onChange={(e) =>
                           handleUpdateItem(item.id, 'width', parseFloat(e.target.value) || 0)
                         }
-                        className="w-20 text-right text-xs border border-transparent hover:border-slate-200 focus:border-blue-500 rounded py-0.5 px-1 bg-transparent focus:bg-white"
+                        className="w-20 text-right text-xs border border-transparent hover:border-slate-200 disabled:hover:border-transparent focus:border-blue-500 disabled:cursor-not-allowed rounded py-0.5 px-1 bg-transparent focus:bg-white"
                       />
                     </td>
                     <td className="py-1.5 px-4 text-right">
                       <input
                         type="number"
                         min="1"
+                        disabled={readOnly}
                         placeholder="Height"
                         value={item.height || ''}
                         onChange={(e) =>
                           handleUpdateItem(item.id, 'height', parseFloat(e.target.value) || 0)
                         }
-                        className="w-20 text-right text-xs border border-transparent hover:border-slate-200 focus:border-blue-500 rounded py-0.5 px-1 bg-transparent focus:bg-white"
+                        className="w-20 text-right text-xs border border-transparent hover:border-slate-200 disabled:hover:border-transparent focus:border-blue-500 disabled:cursor-not-allowed rounded py-0.5 px-1 bg-transparent focus:bg-white"
                       />
                     </td>
                     <td className="py-1.5 px-4 text-right text-slate-500 font-mono text-xs">
@@ -480,14 +506,16 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                       {item.totalSqm > 0 ? item.totalSqm.toFixed(2) : '-'}
                     </td>
                     <td className="py-1.5 px-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-600 transition cursor-pointer"
-                        title="Delete row"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-600 transition cursor-pointer"
+                          title="Delete row"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -508,7 +536,7 @@ export const GlassSectionCard: React.FC<GlassSectionCardProps> = ({
                     {totalSqm.toLocaleString()}
                   </td>
                   <td className="py-2.5 px-2 text-center">
-                    {section.items.length > 0 && (
+                    {!readOnly && section.items.length > 0 && (
                       <button
                         type="button"
                         onClick={handleClearAllItems}

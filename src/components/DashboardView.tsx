@@ -6,7 +6,8 @@ import {
   Layers,
   Calendar,
   Eye,
-  Trash2,
+  Ban,
+  X,
   Copy,
   Printer,
   Download,
@@ -16,19 +17,26 @@ import {
   SlidersHorizontal,
   FileSpreadsheet,
   Check,
-  Sparkles
+  Sparkles,
+  AlertTriangle,
+  UserCheck,
+  CheckCircle2,
+  Lock,
+  FileCheck
 } from 'lucide-react';
 import { Quotation } from '../types';
 import { InterglassEmblem } from './InterglassLogo';
 import { calculateQuotationTotals } from '../utils/calculations';
-import { generateNextQuoteNumber } from '../utils/quotationStorage';
+import { generateNextQuoteNumber, ConfirmationDetails } from '../utils/quotationStorage';
 
 interface DashboardViewProps {
   quotations: Quotation[];
   onAddNewQuotation: () => void;
   onOpenQuotation: (quotation: Quotation, tab?: 'edit' | 'preview') => void;
   onDuplicateQuotation: (id: string) => void;
-  onDeleteQuotation: (id: string) => void;
+  onCancelQuotation: (id: string, reason: string) => void;
+  onConfirmQuotation: (id: string, details: ConfirmationDetails) => void;
+  onUnconfirmQuotation: (id: string) => void;
   onLoadSample: () => void;
   onExportBackup: () => void;
   onImportBackup: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -39,7 +47,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onAddNewQuotation,
   onOpenQuotation,
   onDuplicateQuotation,
-  onDeleteQuotation,
+  onCancelQuotation,
+  onConfirmQuotation,
+  onUnconfirmQuotation,
   onLoadSample,
   onExportBackup,
   onImportBackup,
@@ -48,6 +58,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'ref-desc'>('date-desc');
   const [copiedRef, setCopiedRef] = useState<string | null>(null);
+
+  // Cancellation Modal State
+  const [quoteToCancel, setQuoteToCancel] = useState<Quotation | null>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState('');
+  const [cancelError, setCancelError] = useState('');
+
+  // Handle open cancellation modal
+  const handleOpenCancelModal = (quote: Quotation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setQuoteToCancel(quote);
+    setCancelReasonInput('');
+    setCancelError('');
+  };
+
+  // Confirm cancellation
+  const handleConfirmCancel = () => {
+    if (!quoteToCancel) return;
+    if (!cancelReasonInput.trim()) {
+      setCancelError('Please provide a reason for cancelling this quotation.');
+      return;
+    }
+    onCancelQuotation(quoteToCancel.id, cancelReasonInput.trim());
+    setQuoteToCancel(null);
+    setCancelReasonInput('');
+    setCancelError('');
+  };
 
   // Compute next quote number for display on the Add button
   const nextQuoteNumber = useMemo(() => {
@@ -348,7 +384,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               type="button"
               onClick={onLoadSample}
               className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-[#7B1818] bg-white border border-slate-200 hover:border-red-200 rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Add Thamvos Interiors sample quotation template"
+              title="Add sample quotation template"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
               <span>Load Sample</span>
@@ -405,7 +441,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer flex items-center gap-2"
                   >
                     <FileSpreadsheet className="w-4 h-4 text-slate-600" />
-                    <span>Load Thamvos Template</span>
+                    <span>Load Sample Template</span>
                   </button>
                 </div>
               </>
@@ -431,19 +467,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     const { grandTotalQty, grandTotalSqm, totalWithVatAED } = calculateQuotationTotals(q);
                     const ref = q.from?.refNo || 'Pending Ref';
                     const isCopied = copiedRef === ref;
+                    const isCancelled = q.status === 'cancelled';
 
                     return (
                       <tr
                         key={q.id}
                         onClick={() => onOpenQuotation(q, 'edit')}
-                        className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
+                        className={`transition-colors cursor-pointer group ${
+                          isCancelled
+                            ? 'bg-slate-100/75 hover:bg-slate-200/50 opacity-65 text-slate-500'
+                            : 'hover:bg-slate-50/70'
+                        }`}
                       >
                         {/* Quote Number Badge */}
                         <td className="py-3 px-4 align-top">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-[#7B1818] text-xs sm:text-sm bg-red-50/80 px-2 py-0.5 rounded border border-red-200/60 group-hover:border-red-300 transition-colors">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`font-mono font-bold text-xs sm:text-sm px-2 py-0.5 rounded border transition-colors ${
+                                isCancelled
+                                  ? 'text-slate-500 bg-slate-200/90 border-slate-300 line-through'
+                                  : 'text-[#7B1818] bg-red-50/80 border-red-200/60 group-hover:border-red-300'
+                              }`}
+                            >
                               {ref}
                             </span>
+                            {isCancelled && (
+                              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">
+                                Cancelled
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => handleCopyRef(ref, e)}
@@ -460,6 +512,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <div className="text-[11px] text-slate-400 font-mono mt-1">
                             {q.from?.rev || 'REV-00'}
                           </div>
+                          {isCancelled && q.cancellationReason && (
+                            <div className="text-[11px] text-red-700/80 font-medium italic mt-1.5 flex items-start gap-1">
+                              <Ban className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+                              <span className="truncate max-w-[200px]" title={q.cancellationReason}>
+                                Reason: {q.cancellationReason}
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Date */}
@@ -469,7 +529,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                         {/* Client & Info */}
                         <td className="py-3 px-4 align-top">
-                          <div className="font-semibold text-slate-900 text-sm">
+                          <div className={`font-semibold text-sm ${isCancelled ? 'text-slate-600 line-through' : 'text-slate-900'}`}>
                             {q.client?.name || <span className="text-slate-400 italic">No client name entered</span>}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
@@ -504,7 +564,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                         {/* Total Amount AED */}
                         <td className="py-3 px-4 align-top text-right">
-                          <div className="font-mono font-bold text-sm text-slate-900">
+                          <div className={`font-mono font-bold text-sm ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
                             AED {totalWithVatAED.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                           <div className="text-[10px] text-slate-400">
@@ -515,14 +575,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {/* Actions */}
                         <td className="py-3 px-4 align-top text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Open / Edit Button */}
+                            {/* Open Button */}
                             <button
                               type="button"
                               onClick={() => onOpenQuotation(q, 'edit')}
-                              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                              title="Open & Edit quotation"
+                              className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                                isCancelled
+                                  ? 'bg-slate-700 hover:bg-slate-800 text-white'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-white'
+                              }`}
+                              title={isCancelled ? 'Open in Read-Only Mode' : 'Open & Edit quotation'}
                             >
                               <span>Open</span>
+                              {isCancelled && <span className="text-[10px] opacity-80">(Locked)</span>}
                             </button>
 
                             {/* Preview / Print Button */}
@@ -540,20 +605,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               type="button"
                               onClick={() => onDuplicateQuotation(q.id)}
                               className="p-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
-                              title="Duplicate with next serial number"
+                              title="Duplicate as new quote with next sequential ref"
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              onClick={() => onDeleteQuotation(q.id)}
-                              className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                              title="Delete quotation"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {/* Cancel Button (replaces Delete button) */}
+                            {isCancelled ? (
+                              <span
+                                className="px-2 py-1 text-[11px] font-bold uppercase rounded bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed select-none"
+                                title="This quotation is already cancelled"
+                              >
+                                Cancelled
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenCancelModal(q, e)}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-800 hover:text-red-700 bg-amber-50 hover:bg-red-50 border border-amber-200 hover:border-red-200 rounded transition-colors cursor-pointer"
+                                title="Cancel quotation and lock reference"
+                              >
+                                <Ban className="w-3.5 h-3.5 text-amber-700" />
+                                <span>Cancel</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -578,6 +653,115 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Cancellation Reason Modal */}
+      {quoteToCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Cancel Quotation
+                  </h3>
+                  <p className="text-xs font-mono font-semibold text-[#7B1818] mt-0.5">
+                    {quoteToCancel.from?.refNo || 'Quotation'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuoteToCancel(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-lg p-3 text-xs text-amber-900 mb-4">
+              <p className="font-semibold mb-0.5 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                Quotation Cancellation Policy
+              </p>
+              <p className="text-amber-800 text-[11px] leading-relaxed mt-1">
+                Issued quote reference numbers cannot be deleted to preserve sequential auditing.
+                Cancelling will mark this quote as cancelled, gray it out on the dashboard, and permanently lock all its values in read-only mode.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reason for Cancellation <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={cancelReasonInput}
+                  onChange={(e) => {
+                    setCancelReasonInput(e.target.value);
+                    if (cancelError) setCancelError('');
+                  }}
+                  placeholder="e.g. Client requested revised glass specifications..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-800 placeholder-slate-400"
+                  autoFocus
+                />
+                {cancelError && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">{cancelError}</p>
+                )}
+              </div>
+
+              {/* Quick reason suggestions */}
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-1.5">
+                  Suggested reasons:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Client revised glass specs',
+                    'Pricing rejected by client',
+                    'Created duplicate in error',
+                    'Project postponed indefinitely',
+                    'Project scope re-tendered',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => {
+                        setCancelReasonInput(suggestion);
+                        if (cancelError) setCancelError('');
+                      }}
+                      className="text-[11px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors text-left"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setQuoteToCancel(null)}
+                className="px-3.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Keep Quotation Active
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Confirm & Cancel Quote</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
