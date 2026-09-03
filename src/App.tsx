@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Printer,
@@ -20,10 +20,20 @@ import {
   createSampleQuotation,
   createEmptyGlassSection,
 } from './data/defaultData';
+import {
+  getSavedQuotations,
+  saveQuotation,
+  deleteQuotation,
+  createNewQuotationWithNextRef,
+  duplicateQuotation,
+  initializeSampleIfEmpty,
+  STORAGE_KEY,
+} from './utils/quotationStorage';
 import { calculateQuotationTotals } from './utils/calculations';
 import { convertNumberToWords } from './utils/numberToWords';
 import { exportToPdf } from './utils/pdfGenerator';
 import { TopNavbar } from './components/TopNavbar';
+import { DashboardView } from './components/DashboardView';
 import { CompanyAndClientCard } from './components/CompanyAndClientCard';
 import { GlassSectionCard } from './components/GlassSectionCard';
 import { QuotationDocument } from './components/QuotationDocument';
@@ -31,7 +41,20 @@ import { SavedQuotationsModal } from './components/SavedQuotationsModal';
 import { PasteExcelModal } from './components/PasteExcelModal';
 
 export default function App() {
-  const [quotation, setQuotation] = useState<Quotation>(createBlankQuotation);
+  // App starts from Dashboard as requested
+  const [viewMode, setViewMode] = useState<'dashboard' | 'portal'>('dashboard');
+
+  // Quotations list loaded from local storage
+  const [quotations, setQuotations] = useState<Quotation[]>(() => {
+    return initializeSampleIfEmpty();
+  });
+
+  // Current active quotation being viewed/edited in the portal
+  const [quotation, setQuotation] = useState<Quotation>(() => {
+    const list = getSavedQuotations();
+    return list[0] || createBlankQuotation();
+  });
+
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [activePasteSection, setActivePasteSection] = useState<GlassSection | null>(null);
@@ -46,15 +69,117 @@ export default function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Sync quotation changes into local storage automatically
+  const updateQuotationAndStorage = (updater: (prev: Quotation) => Quotation) => {
+    setQuotation((prev) => {
+      const updated = updater(prev);
+      const updatedList = saveQuotation(updated);
+      setQuotations(updatedList);
+      return updated;
+    });
+  };
+
   const { grandTotalQty, grandTotalSqm, totalAmountAED, vatAmountAED, totalWithVatAED } =
     calculateQuotationTotals(quotation);
   const amountInWords = convertNumberToWords(totalWithVatAED);
+
+  // DASHBOARD ACTION: Add New Quotation with format IGC/{YY}/{MM}/{SERIAL}
+  const handleAddNewQuotation = () => {
+    const newQuote = createNewQuotationWithNextRef(new Date());
+    const updatedList = saveQuotation(newQuote);
+    setQuotations(updatedList);
+    setQuotation(newQuote);
+    setActiveTab('edit');
+    setViewMode('portal');
+    showNotification(`Created new quotation ${newQuote.from.refNo}`, 'success');
+  };
+
+  // DASHBOARD ACTION: Open existing quote
+  const handleOpenQuotation = (targetQuote: Quotation, tab: 'edit' | 'preview' = 'edit') => {
+    setQuotation(targetQuote);
+    setActiveTab(tab);
+    setViewMode('portal');
+  };
+
+  // DASHBOARD ACTION: Duplicate quote with next serial
+  const handleDuplicateQuotation = (id: string) => {
+    const { newQuotation, allQuotes } = duplicateQuotation(id);
+    setQuotations(allQuotes);
+    showNotification(`Duplicated as ${newQuotation.from.refNo}`, 'success');
+  };
+
+  // DASHBOARD ACTION: Delete quote
+  const handleDeleteQuotation = (id: string) => {
+    const target = quotations.find((q) => q.id === id);
+    const ref = target?.from?.refNo || 'this quotation';
+    if (confirm(`Are you sure you want to delete ${ref}?`)) {
+      const updated = deleteQuotation(id);
+      setQuotations(updated);
+      if (quotation.id === id) {
+        if (updated.length > 0) {
+          setQuotation(updated[0]);
+        } else {
+          setQuotation(createNewQuotationWithNextRef());
+        }
+      }
+      showNotification(`Deleted ${ref}`, 'info');
+    }
+  };
+
+  // Load sample template matching official Thamvos Interiors sample
+  const handleLoadSample = () => {
+    const sample = createSampleQuotation();
+    sample.id = `sample-quote-${Date.now()}`;
+    // Assign proper sequential ref
+    const updatedList = saveQuotation(sample);
+    setQuotations(updatedList);
+    setQuotation(sample);
+    showNotification('Loaded sample quotation from template sheet', 'success');
+  };
+
+  // Export JSON Backup
+  const handleExportBackup = () => {
+    const allQuotes = getSavedQuotations();
+    const blob = new Blob([JSON.stringify(allQuotes, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Interglass_Quotations_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('Exported quotations backup file', 'success');
+  };
+
+  // Import JSON Backup
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          setQuotations(parsed);
+          setQuotation(parsed[0]);
+          showNotification(`Imported ${parsed.length} quotations successfully!`, 'success');
+        } else {
+          showNotification('Invalid quotations backup file', 'error');
+        }
+      } catch (err) {
+        showNotification('Failed to read JSON backup file', 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Add new Glass section (Glass -02, Glass -03...)
   const handleAddGlassSection = () => {
     const nextIndex = quotation.glassSections.length + 1;
     const newSection = createEmptyGlassSection(nextIndex);
-    setQuotation((prev) => ({
+    updateQuotationAndStorage((prev) => ({
       ...prev,
       glassSections: [...prev.glassSections, newSection],
     }));
@@ -63,7 +188,7 @@ export default function App() {
 
   // Update a single glass section
   const handleUpdateSection = (updatedSection: GlassSection) => {
-    setQuotation((prev) => ({
+    updateQuotationAndStorage((prev) => ({
       ...prev,
       glassSections: prev.glassSections.map((s) =>
         s.id === updatedSection.id ? updatedSection : s
@@ -73,7 +198,7 @@ export default function App() {
 
   // Remove a glass section
   const handleRemoveSection = (sectionId: string) => {
-    setQuotation((prev) => {
+    updateQuotationAndStorage((prev) => {
       const filtered = prev.glassSections.filter((s) => s.id !== sectionId);
       // Renumber section codes cleanly
       const renumbered = filtered.map((s, idx) => ({
@@ -88,7 +213,7 @@ export default function App() {
   // Move section up
   const handleMoveSectionUp = (index: number) => {
     if (index === 0) return;
-    setQuotation((prev) => {
+    updateQuotationAndStorage((prev) => {
       const sections = [...prev.glassSections];
       const temp = sections[index - 1];
       sections[index - 1] = sections[index];
@@ -100,7 +225,7 @@ export default function App() {
   // Move section down
   const handleMoveSectionDown = (index: number) => {
     if (index === quotation.glassSections.length - 1) return;
-    setQuotation((prev) => {
+    updateQuotationAndStorage((prev) => {
       const sections = [...prev.glassSections];
       const temp = sections[index + 1];
       sections[index + 1] = sections[index];
@@ -141,21 +266,16 @@ export default function App() {
     }
   };
 
-  // Load sample data matching the attached PDF sheet
-  const handleLoadSample = () => {
-    if (confirm('Load sample quotation data (Thamvos Interiors with Glass 01, 02, 03)?')) {
-      const sample = createSampleQuotation();
-      setQuotation(sample);
-      showNotification('Loaded sample quotation from template sheet', 'success');
-    }
+  // Start fresh quotation inside portal
+  const handleNewQuotation = () => {
+    handleAddNewQuotation();
   };
 
-  // Start fresh quotation
-  const handleNewQuotation = () => {
-    if (confirm('Start a new blank quotation? Unsaved changes will be cleared.')) {
-      setQuotation(createBlankQuotation());
-      showNotification('Created new quotation', 'info');
-    }
+  // Save current quotation to dashboard
+  const handleSaveCurrentQuote = () => {
+    const updated = saveQuotation(quotation);
+    setQuotations(updated);
+    showNotification(`Saved ${quotation.from.refNo} to Dashboard!`, 'success');
   };
 
   // Apply items pasted into the global/modal paste section
@@ -188,19 +308,275 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans">
-      {/* Top Application Navbar */}
-      <TopNavbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isGeneratingPdf={isGeneratingPdf}
-        onPrint={handlePrint}
-        onSavePdf={handleSavePdf}
-        onAddGlassSection={handleAddGlassSection}
-        onLoadSample={handleLoadSample}
-        onNewQuotation={handleNewQuotation}
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        glassSectionCount={quotation.glassSections.length}
-      />
+      {/* VIEW 1: DASHBOARD VIEW */}
+      {viewMode === 'dashboard' ? (
+        <DashboardView
+          quotations={quotations}
+          onAddNewQuotation={handleAddNewQuotation}
+          onOpenQuotation={handleOpenQuotation}
+          onDuplicateQuotation={handleDuplicateQuotation}
+          onDeleteQuotation={handleDeleteQuotation}
+          onLoadSample={handleLoadSample}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+        />
+      ) : (
+        /* VIEW 2: QUOTATION PORTAL (BUILDER & DOCUMENT PREVIEW) */
+        <>
+          {/* Top Application Navbar */}
+          <TopNavbar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            isGeneratingPdf={isGeneratingPdf}
+            onPrint={handlePrint}
+            onSavePdf={handleSavePdf}
+            onAddGlassSection={handleAddGlassSection}
+            onLoadSample={handleLoadSample}
+            onNewQuotation={handleNewQuotation}
+            onOpenHistory={() => setIsHistoryOpen(true)}
+            onBackToDashboard={() => {
+              // Ensure current changes are saved and return to dashboard
+              saveQuotation(quotation);
+              setQuotations(getSavedQuotations());
+              setViewMode('dashboard');
+            }}
+            onSaveCurrentQuote={handleSaveCurrentQuote}
+            glassSectionCount={quotation.glassSections.length}
+            currentRefNo={quotation.from?.refNo}
+            clientName={quotation.client?.name}
+          />
+
+          {/* Main Content Area */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+            {activeTab === 'edit' ? (
+              <div className="space-y-6">
+                {/* Header: Client TO & Interglass FROM info */}
+                <CompanyAndClientCard
+                  quotation={quotation}
+                  onUpdateQuotation={(updated) => {
+                    updateQuotationAndStorage(() => updated);
+                  }}
+                />
+
+                {/* Glass Sections List */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-blue-100 text-blue-700 rounded-md">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Glass Specifications & Sizes ({quotation.glassSections.length} Sections)
+                      </h2>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddGlassSection}
+                      className="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>
+                        Add Glass Section (Glass -{String(quotation.glassSections.length + 1).padStart(2, '0')})
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Glass Sections Loop */}
+                  {quotation.glassSections.map((section, idx) => (
+                    <GlassSectionCard
+                      key={section.id}
+                      section={section}
+                      sectionIndex={idx}
+                      totalSections={quotation.glassSections.length}
+                      applyMinRule={quotation.applyMinAreaRule}
+                      minThreshold={quotation.minAreaThreshold}
+                      onUpdateSection={handleUpdateSection}
+                      onRemoveSection={handleRemoveSection}
+                      onMoveUp={idx > 0 ? () => handleMoveSectionUp(idx) : undefined}
+                      onMoveDown={
+                        idx < quotation.glassSections.length - 1
+                          ? () => handleMoveSectionDown(idx)
+                          : undefined
+                      }
+                    />
+                  ))}
+
+                  {/* Bottom Add Section Card */}
+                  <div
+                    onClick={handleAddGlassSection}
+                    className="border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-blue-600"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-xs">
+                      <Plus className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="font-semibold text-xs text-slate-700">
+                      Click to Add Another Glass Type Section (Glass -
+                      {String(quotation.glassSections.length + 1).padStart(2, '0')})
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Multiple glass types supported (Annealed, Toughened, Polished, Laminated, Double Glazed)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Calculation & Summary Card */}
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mt-8">
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
+                    <Calculator className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Quotation Calculation Summary
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        Total Quantity
+                      </span>
+                      <span className="text-lg font-bold text-slate-900 font-mono">
+                        {grandTotalQty.toLocaleString()} <span className="text-xs font-normal text-slate-500">pcs</span>
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        Total Glass Area
+                      </span>
+                      <span className="text-lg font-bold text-slate-900 font-mono">
+                        {grandTotalSqm.toLocaleString()} <span className="text-xs font-normal text-slate-500">m²</span>
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        Subtotal (Excl. VAT)
+                      </span>
+                      <span className="text-lg font-bold text-slate-900 font-mono">
+                        AED {totalAmountAED.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="bg-blue-50/70 p-4 rounded-lg border border-blue-200/80">
+                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
+                        Total With VAT (5%)
+                      </span>
+                      <span className="text-lg font-black text-blue-700 font-mono">
+                        AED {totalWithVatAED.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Amount in words */}
+                  <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                      Amount in Words:
+                    </span>
+                    <p className="font-bold text-slate-800 italic">
+                      {amountInWords}
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-5 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">
+                      Ready to print or save as PDF? You can preview the exact document template anytime.
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('preview')}
+                        className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        View Print Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSavePdf}
+                        disabled={isGeneratingPdf}
+                        className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <FileDown className="w-4 h-4 text-slate-600" />
+                        <span>Save PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePrint}
+                        className="px-5 py-2 text-xs font-medium text-white bg-[#7B1818] hover:bg-[#631313] rounded-md flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span>Print Quotation</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* PREVIEW TAB */
+              <div className="space-y-4">
+                {/* Preview Toolbar */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 print:hidden">
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-900">Quotation Template Preview:</span>
+                    <span className="font-mono font-bold text-[#7B1818]">{quotation.from?.refNo}</span>
+                    <span>• Matches official Interglass print & PDF sheet layout.</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('edit')}
+                      className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition cursor-pointer"
+                    >
+                      Back to Form
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSavePdf}
+                      disabled={isGeneratingPdf}
+                      className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <FileDown className="w-4 h-4 text-slate-600" />
+                      <span>Save as PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePrint}
+                      className="px-4 py-1.5 text-xs font-medium text-white bg-[#7B1818] hover:bg-[#631313] rounded-md flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print Document</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Rendered Container in Preview */}
+                <div className="overflow-x-auto py-2">
+                  <QuotationDocument
+                    quotation={quotation}
+                    isEditable={true}
+                    onUpdateQuotation={(updated) => {
+                      updateQuotationAndStorage(() => updated);
+                    }}
+                    onOpenPasteModalForSection={(section) => setActivePasteSection(section)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Off-screen Document for Print and PDF Export when on Edit tab */}
+            {activeTab === 'edit' && (
+              <div className="fixed -left-[9999px] top-0 pointer-events-none print:static print:pointer-events-auto print:block">
+                <QuotationDocument
+                  quotation={quotation}
+                  isEditable={false}
+                />
+              </div>
+            )}
+          </main>
+        </>
+      )}
 
       {/* Floating Notification Toast */}
       {notification && (
@@ -222,228 +598,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {activeTab === 'edit' ? (
-          <div className="space-y-6">
-            {/* Header: Client TO & Interglass FROM info */}
-            <CompanyAndClientCard
-              quotation={quotation}
-              onUpdateQuotation={setQuotation}
-            />
-
-            {/* Glass Sections List */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-blue-100 text-blue-700 rounded-md">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Glass Specifications & Sizes ({quotation.glassSections.length} Sections)
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddGlassSection}
-                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Glass Section (Glass -{String(quotation.glassSections.length + 1).padStart(2, '0')})</span>
-                </button>
-              </div>
-
-              {/* Glass Sections Loop */}
-              {quotation.glassSections.map((section, idx) => (
-                <GlassSectionCard
-                  key={section.id}
-                  section={section}
-                  sectionIndex={idx}
-                  totalSections={quotation.glassSections.length}
-                  applyMinRule={quotation.applyMinAreaRule}
-                  minThreshold={quotation.minAreaThreshold}
-                  onUpdateSection={handleUpdateSection}
-                  onRemoveSection={handleRemoveSection}
-                  onMoveUp={idx > 0 ? () => handleMoveSectionUp(idx) : undefined}
-                  onMoveDown={
-                    idx < quotation.glassSections.length - 1
-                      ? () => handleMoveSectionDown(idx)
-                      : undefined
-                  }
-                />
-              ))}
-
-              {/* Bottom Add Section Card */}
-              <div
-                onClick={handleAddGlassSection}
-                className="border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/40 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-blue-600"
-              >
-                <div className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-xs">
-                  <Plus className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="font-semibold text-xs text-slate-700">
-                  Click to Add Another Glass Type Section (Glass -{String(quotation.glassSections.length + 1).padStart(2, '0')})
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Multiple glass types supported (Annealed, Toughened, Polished, Laminated, Double Glazed)
-                </div>
-              </div>
-            </div>
-
-            {/* Calculation & Summary Card */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mt-8">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
-                <Calculator className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Quotation Calculation Summary
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Total Quantity
-                  </span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">
-                    {grandTotalQty.toLocaleString()} <span className="text-xs font-normal text-slate-500">pcs</span>
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Total Glass Area
-                  </span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">
-                    {grandTotalSqm.toLocaleString()} <span className="text-xs font-normal text-slate-500">m²</span>
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Subtotal (Excl. VAT)
-                  </span>
-                  <span className="text-lg font-bold text-slate-900 font-mono">
-                    AED {totalAmountAED.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="bg-blue-50/70 p-4 rounded-lg border border-blue-200/80">
-                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
-                    Total With VAT (5%)
-                  </span>
-                  <span className="text-lg font-black text-blue-700 font-mono">
-                    AED {totalWithVatAED.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Amount in words */}
-              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Amount in Words:
-                </span>
-                <p className="font-bold text-slate-800 italic">
-                  {amountInWords}
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="mt-5 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs text-slate-500">
-                  Ready to print or save as PDF? You can preview the exact document template anytime.
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview')}
-                    className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    View Print Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSavePdf}
-                    disabled={isGeneratingPdf}
-                    className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md flex items-center gap-1.5 transition cursor-pointer"
-                  >
-                    <FileDown className="w-4 h-4 text-slate-600" />
-                    <span>Save PDF</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePrint}
-                    className="px-5 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Print Quotation</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* PREVIEW TAB */
-          <div className="space-y-4">
-            {/* Preview Toolbar */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 print:hidden">
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <span className="font-semibold text-slate-900">Quotation Template Preview:</span>
-                <span>Matches official Interglass print & PDF sheet layout.</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('edit')}
-                  className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition cursor-pointer"
-                >
-                  Back to Form
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePdf}
-                  disabled={isGeneratingPdf}
-                  className="px-3.5 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <FileDown className="w-4 h-4 text-slate-600" />
-                  <span>Save as PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Document</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Document Rendered Container in Preview */}
-            <div className="overflow-x-auto py-2">
-              <QuotationDocument
-                quotation={quotation}
-                isEditable={true}
-                onUpdateQuotation={setQuotation}
-                onOpenPasteModalForSection={(section) => setActivePasteSection(section)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Off-screen Document for Print and PDF Export when on Edit tab */}
-        {activeTab === 'edit' && (
-          <div className="fixed -left-[9999px] top-0 pointer-events-none print:static print:pointer-events-auto print:block">
-            <QuotationDocument
-              quotation={quotation}
-              isEditable={false}
-            />
-          </div>
-        )}
-      </main>
-
       {/* Saved Quotations Modal */}
       <SavedQuotationsModal
         isOpen={isHistoryOpen}
@@ -451,7 +605,9 @@ export default function App() {
         onClose={() => setIsHistoryOpen(false)}
         onLoadQuotation={(loaded) => {
           setQuotation(loaded);
-          showNotification(`Loaded quotation: ${loaded.title}`, 'success');
+          const updated = saveQuotation(loaded);
+          setQuotations(updated);
+          showNotification(`Loaded quotation: ${loaded.from?.refNo || loaded.title}`, 'success');
         }}
       />
 

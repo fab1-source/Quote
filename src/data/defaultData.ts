@@ -35,7 +35,7 @@ export const DEFAULT_BANK_DETAILS = {
 
 export const DEFAULT_FROM_INFO = {
   companyName: "Inter Glass Co. LLC. Ajman",
-  refNo: "IG/26-06/ 3685",
+  refNo: `IGC/${String(new Date().getFullYear()).slice(-2)}/${String(new Date().getMonth() + 1).padStart(2, '0')}/001`,
   rev: "REV-00",
   dated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'), // e.g. 03-09-2026
   email: "sales3@interglass.org",
@@ -58,10 +58,11 @@ export const createEmptyGlassSection = (index: number): GlassSection => {
   };
 };
 
-export const createBlankQuotation = (): Quotation => {
+export const createBlankQuotation = (initialRefNo?: string): Quotation => {
+  const ref = initialRefNo || DEFAULT_FROM_INFO.refNo;
   return {
-    id: `quote-${Date.now()}`,
-    title: "New Quotation",
+    id: `quote-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    title: `Quotation ${ref}`,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     client: {
@@ -75,7 +76,11 @@ export const createBlankQuotation = (): Quotation => {
       ref: "",
       trn: ""
     },
-    from: { ...DEFAULT_FROM_INFO },
+    from: {
+      ...DEFAULT_FROM_INFO,
+      refNo: ref,
+      dated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
+    },
     scopeOfWork: "Description/ Scope of Work",
     glassSections: [createEmptyGlassSection(1)],
     applyMinAreaRule: true,
