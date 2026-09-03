@@ -1,6 +1,6 @@
 import React from 'react';
 import { Quotation, GlassSection } from '../types';
-import { InterglassLogo } from './InterglassLogo';
+import { InterglassLogo, InterglassLogoBanner } from './InterglassLogo';
 import { calculateSectionTotals, calculateQuotationTotals } from '../utils/calculations';
 import { convertNumberToWords } from '../utils/numberToWords';
 
@@ -55,31 +55,9 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({
       className="bg-white text-neutral-900 mx-auto font-sans text-[11px] leading-snug print:text-[10px] print:leading-tight shadow-lg print:shadow-none border-2 border-black p-4 sm:p-7 max-w-[960px] select-text"
       style={{ minHeight: '1050px' }}
     >
-      {/* 1. Header: Logo & Company Title */}
-      <div className="flex items-center justify-between pb-2 mb-1 border-b-[2px] border-black">
-        <div className="flex items-center gap-3">
-          <InterglassLogo size="md" />
-        </div>
-
-        <div className="text-right">
-          <h1
-            className="text-2xl sm:text-3xl font-serif italic font-black tracking-widest text-[#8A1515]"
-            style={{ fontFamily: 'Georgia, Times New Roman, serif' }}
-          >
-            INTERGLASS CO. LLC
-          </h1>
-          <div className="h-[2px] bg-[#8A1515] w-full mt-0.5"></div>
-          <div className="h-[1px] bg-[#8A1515] w-full mt-[1px]"></div>
-        </div>
-      </div>
-
-      {/* Quotation Title Box */}
-      <div className="text-center my-2">
-        <div className="inline-block border border-black px-12 py-0.5 bg-neutral-50/50">
-          <span className="text-base sm:text-lg font-serif font-black tracking-widest uppercase">
-            QUOTATION
-          </span>
-        </div>
+      {/* 1. Header: Official Interglass Logo Banner & Quotation Title */}
+      <div className="pb-2.5 mb-2 border-b-[2px] border-black flex justify-center">
+        <InterglassLogoBanner className="my-0.5" />
       </div>
 
       {/* 2. Side by Side To & From Tables */}

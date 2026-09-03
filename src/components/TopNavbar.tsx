@@ -10,7 +10,7 @@ import {
   Edit3,
   Loader2
 } from 'lucide-react';
-import { InterglassLogo } from './InterglassLogo';
+import { InterglassLogo, InterglassEmblem } from './InterglassLogo';
 
 interface TopNavbarProps {
   activeTab: 'edit' | 'preview';
@@ -42,16 +42,16 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
         {/* Left: Branding & App Title */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-xs shrink-0">
-            G
+          <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-center shadow-xs shrink-0 hover:bg-white transition-colors">
+            <InterglassEmblem width={46} height={29} />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-slate-900 leading-tight">
                 Interglass CrystalFlow
               </h1>
-              <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded uppercase tracking-wider">
-                Quotation Portal
+              <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-red-800 border border-red-200 rounded uppercase tracking-wider">
+                IGC Portal
               </span>
             </div>
             <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
